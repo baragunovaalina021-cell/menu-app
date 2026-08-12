@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Меню недели</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <header class="topbar">
+      <h1>🍽️ Меню недели</h1>
+      <div id="trialBadge" class="badge"></div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="menu">Меню</button>
+      <button class="tab-btn" data-tab="shopping">Список покупок</button>
+      <button class="tab-btn" data-tab="family">Семья</button>
+    </nav>
+
+    <main>
+      <section id="tab-menu" class="tab-panel active">
+        <div id="menuDays"></div>
+        <button id="generateListBtn" class="primary-btn">Собрать список покупок из меню</button>
+      </section>
+
+      <section id="tab-shopping" class="tab-panel">
+        <form id="addItemForm" class="add-item-form">
+          <input type="text" id="newItemName" placeholder="Добавить продукт..." required />
+          <button type="submit">+</button>
+        </form>
+        <div id="shoppingList"></div>
+        <button id="clearCheckedBtn" class="secondary-btn">Убрать отмеченное</button>
+      </section>
+
+      <section id="tab-family" class="tab-panel">
+        <div class="card">
+          <p>Код приглашения вашей семьи:</p>
+          <div class="invite-code" id="inviteCode">------</div>
+          <p class="hint">Отправьте этот код близким — они смогут вводить его в разделе «Присоединиться», чтобы видеть тот же список покупок и меню.</p>
+        </div>
+        <div class="card">
+          <p>Присоединиться к другой семье по коду:</p>
+          <form id="joinForm" class="add-item-form">
+            <input type="text" id="joinCode" placeholder="Например, TXI76T" required />
+            <button type="submit">Войти</button>
+          </form>
+        </div>
+        <div class="card" id="subscriptionCard"></div>
+      </section>
+    </main>
+
+    <div id="recipePicker" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Выбрать блюдо</h3>
+          <button id="closePicker">✕</button>
+        </div>
+        <input type="text" id="customMealInput" placeholder="Или впишите своё блюдо..." />
+        <button id="saveCustomMeal" class="primary-btn">Сохранить своё блюдо</button>
+        <div id="recipeList" class="recipe-list"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
