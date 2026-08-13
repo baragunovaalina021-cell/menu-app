@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS menu_entries (
   day_of_week INTEGER NOT NULL, -- 0..6 (Mon..Sun)
   recipe_id TEXT,
   custom_text TEXT,
-  UNIQUE(family_id, day_of_week),
   FOREIGN KEY (family_id) REFERENCES families(id)
 );
 
@@ -49,6 +48,29 @@ CREATE TABLE IF NOT EXISTS shopping_items (
   FOREIGN KEY (family_id) REFERENCES families(id)
 );
 `);
+
+// Migration: older deployments had a UNIQUE(family_id, day_of_week) constraint
+// on menu_entries (one meal per day). Drop it so a day can hold several meals,
+// without losing any data already saved by users.
+const existingSchema = db.prepare(
+  `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'menu_entries'`
+).get();
+if (existingSchema && existingSchema.sql.includes('UNIQUE(family_id, day_of_week)')) {
+  db.exec(`
+    ALTER TABLE menu_entries RENAME TO menu_entries_old_v1;
+    CREATE TABLE menu_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      recipe_id TEXT,
+      custom_text TEXT,
+      FOREIGN KEY (family_id) REFERENCES families(id)
+    );
+    INSERT INTO menu_entries (id, family_id, day_of_week, recipe_id, custom_text)
+      SELECT id, family_id, day_of_week, recipe_id, custom_text FROM menu_entries_old_v1;
+    DROP TABLE menu_entries_old_v1;
+  `);
+}
 
 // Seed recipes once
 const seedRecipes = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'recipes.json'), 'utf-8'));
