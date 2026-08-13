@@ -108,6 +108,23 @@
     return `https://5ka.ru/search/?text=${encodeURIComponent(name)}`;
   }
 
+  // Opens the Pyaterochka search page for this product. Inside Telegram, a
+  // plain <a target="_blank"> stays trapped in Telegram's own in-app browser,
+  // which never hands off to a native app. Telegram.WebApp.openLink() routes
+  // through the phone's system browser instead — that's the only way a
+  // universal/app link even has a chance to open the real Pyaterochka app.
+  // Whether it actually does depends entirely on whether Pyaterochka has
+  // registered their app for that link on this device — we can't force it,
+  // there's no public API for that.
+  function openInPyaterochka(name) {
+    const url = pyaterochkaSearchUrl(name);
+    if (tg && typeof tg.openLink === 'function') {
+      tg.openLink(url, { try_instant_view: false });
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
   // --- Trial badge ----------------------------------------------------
   function renderTrialBadge(family) {
     const badge = document.getElementById('trialBadge');
@@ -293,9 +310,10 @@
           <div class="item-name">${item.name}</div>
           <div class="item-qty">${fmtQty(item)}${item.source === 'auto' ? ' · из меню' : ''}</div>
         </div>
-        <a class="cart-link-btn" href="${pyaterochkaSearchUrl(item.name)}" target="_blank" rel="noopener" title="Найти в Пятёрочке">🛒</a>
+        <button class="cart-link-btn" title="Найти в Пятёрочке">🛒</button>
         <button class="delete-item-btn" title="Удалить">✕</button>
       `;
+      row.querySelector('.cart-link-btn').addEventListener('click', () => openInPyaterochka(item.name));
       row.querySelector('.checkbox').addEventListener('click', async () => {
         try {
           await api(`/shopping/${item.id}`, { method: 'PATCH', body: { checked: !item.checked } });
