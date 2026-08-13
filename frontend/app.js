@@ -5,13 +5,34 @@
     tg.expand();
   }
 
-  // API base: same origin as this static page
   const API_BASE = '/api';
 
-  // --- Auth headers -------------------------------------------------
-  // In real Telegram, tg.initData carries a signed payload the backend verifies.
-  // Outside Telegram (e.g. testing in a plain browser) we fall back to a
-  // locally-generated debug identity so the app is still usable for QA.
+  const DAY_COLORS = ['#ff7a45', '#f2b134', '#33b26f', '#4aa3ff', '#a56bff', '#ff5f9e', '#ff5f6d'];
+
+  // Very small keyword -> emoji map so dishes look friendly without any manual tagging.
+  const EMOJI_RULES = [
+    [/суп|борщ|щи/i, '🍲'],
+    [/паст|спагетти|макарон/i, '🍝'],
+    [/рыб|треск|лосос/i, '🐟'],
+    [/куриц|курин|цыпл/i, '🍗'],
+    [/говядин|фарш|тако|бургер/i, '🥩'],
+    [/салат/i, '🥗'],
+    [/омлет|яйц/i, '🍳'],
+    [/рис|плов/i, '🍚'],
+    [/сырник|творог/i, '🧀'],
+    [/рагу|овощ/i, '🥘'],
+    [/пирог|блин|сырник/i, '🥞'],
+    [/суши|ролл/i, '🍣'],
+    [/пицц/i, '🍕'],
+  ];
+  function emojiFor(name) {
+    if (!name) return '🍽️';
+    for (const [re, emoji] of EMOJI_RULES) {
+      if (re.test(name)) return emoji;
+    }
+    return '🍽️';
+  }
+
   function getAuthHeaders() {
     if (tg && tg.initData) {
       return { 'X-Telegram-Init-Data': tg.initData };
@@ -24,7 +45,6 @@
     const debugName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) || 'Гость';
     return {
       'X-Debug-User-Id': debugId,
-      // HTTP header values must be Latin-1; encode Cyrillic names before sending.
       'X-Debug-User-Name': encodeURIComponent(debugName),
     };
   }
@@ -76,13 +96,16 @@
   // --- State --------------------------------------------------------
   let recipes = [];
   let currentPickerDay = null;
-  let familyAccessActive = true;
 
   function fmtQty(item) {
     if (item.qty == null) return '';
     const q = Number(item.qty);
     const qStr = Number.isInteger(q) ? q : q.toFixed(1);
     return `${qStr} ${item.unit || ''}`.trim();
+  }
+
+  function pyaterochkaSearchUrl(name) {
+    return `https://5ka.ru/search/?text=${encodeURIComponent(name)}`;
   }
 
   // --- Trial badge ----------------------------------------------------
@@ -93,13 +116,12 @@
       badge.className = 'badge premium';
     } else if (family.trialActive) {
       const daysLeft = Math.max(0, Math.ceil((family.trialEndsAt - Date.now()) / (24 * 60 * 60 * 1000)));
-      badge.textContent = `Пробный период: ${daysLeft} дн.`;
+      badge.textContent = `Пробный: ${daysLeft} дн.`;
       badge.className = 'badge';
     } else {
       badge.textContent = 'Подписка истекла';
       badge.className = 'badge expired';
     }
-    familyAccessActive = family.accessActive;
   }
 
   function renderSubscriptionCard(family) {
@@ -158,41 +180,71 @@
     week.forEach((day) => {
       const card = document.createElement('div');
       card.className = 'day-card';
-      const mealLabel = day.recipe ? day.recipe.name : (day.customText || null);
+      card.style.setProperty('--day-color', DAY_COLORS[day.day]);
+
+      const chipsHtml = day.meals.length
+        ? `<div class="meal-chips">${day.meals
+            .map((m) => {
+              const label = m.recipe ? m.recipe.name : m.customText;
+              return `<div class="meal-chip">
+                <span class="meal-emoji">${emojiFor(label)}</span>
+                <span class="meal-text">${label}</span>
+                <button class="remove-meal" data-entry-id="${m.id}">✕</button>
+              </div>`;
+            })
+            .join('')}</div>`
+        : `<div class="no-meals">Пока ничего не выбрано</div>`;
+
       card.innerHTML = `
-        <div>
-          <div class="day-name">${day.dayName}</div>
-          <div class="meal-name ${mealLabel ? '' : 'empty'}">${mealLabel || 'Не выбрано'}</div>
+        <div class="day-header">
+          <span class="day-name">${day.dayName}</span>
         </div>
-        <div class="chevron">›</div>
+        ${chipsHtml}
+        <button class="add-meal-btn" data-day="${day.day}">+ Добавить блюдо</button>
       `;
-      card.addEventListener('click', () => openRecipePicker(day.day));
+
+      card.querySelector('.add-meal-btn').addEventListener('click', () => openRecipePicker(day.day, day.dayName));
+      card.querySelectorAll('.remove-meal').forEach((btn) => {
+        btn.addEventListener('click', () => removeMeal(btn.dataset.entryId));
+      });
+
       container.appendChild(card);
     });
   }
 
-  function openRecipePicker(day) {
+  async function removeMeal(entryId) {
+    try {
+      await api(`/menu/entry/${entryId}`, { method: 'DELETE' });
+      loadMenu();
+    } catch (err) {
+      handleGateError(err);
+    }
+  }
+
+  function openRecipePicker(day, dayName) {
     currentPickerDay = day;
+    document.getElementById('pickerDayTitle').textContent = `Добавить блюдо · ${dayName}`;
     document.getElementById('customMealInput').value = '';
     const list = document.getElementById('recipeList');
     list.innerHTML = '';
     recipes.forEach((r) => {
       const el = document.createElement('div');
       el.className = 'recipe-item';
-      el.innerHTML = `<div class="r-name">${r.name}</div><div class="r-ing">${r.ingredients.map((i) => i.name).join(', ')}</div>`;
-      el.addEventListener('click', () => selectRecipe(r.id));
+      el.innerHTML = `
+        <span class="r-emoji">${emojiFor(r.name)}</span>
+        <div>
+          <div class="r-name">${r.name}</div>
+          <div class="r-ing">${r.ingredients.map((i) => i.name).join(', ')}</div>
+        </div>`;
+      el.addEventListener('click', () => addMeal({ recipeId: r.id }));
       list.appendChild(el);
     });
     document.getElementById('recipePicker').classList.remove('hidden');
   }
 
-  async function selectRecipe(recipeId) {
-    await saveMeal({ recipeId, customText: null });
-  }
-
-  async function saveMeal({ recipeId, customText }) {
+  async function addMeal({ recipeId, customText }) {
     try {
-      await api(`/menu/${currentPickerDay}`, { method: 'PUT', body: { recipeId, customText } });
+      await api(`/menu/${currentPickerDay}`, { method: 'POST', body: { recipeId, customText } });
       document.getElementById('recipePicker').classList.add('hidden');
       loadMenu();
     } catch (err) {
@@ -207,7 +259,7 @@
   document.getElementById('saveCustomMeal').addEventListener('click', () => {
     const text = document.getElementById('customMealInput').value.trim();
     if (!text) return;
-    saveMeal({ recipeId: null, customText: text });
+    addMeal({ customText: text });
   });
 
   document.getElementById('generateListBtn').addEventListener('click', async () => {
@@ -221,8 +273,11 @@
   });
 
   // --- Shopping list tab --------------------------------------------
+  let lastShoppingItems = [];
+
   async function loadShoppingList() {
     const items = await api('/shopping');
+    lastShoppingItems = items;
     const container = document.getElementById('shoppingList');
     container.innerHTML = '';
     if (items.length === 0) {
@@ -238,10 +293,20 @@
           <div class="item-name">${item.name}</div>
           <div class="item-qty">${fmtQty(item)}${item.source === 'auto' ? ' · из меню' : ''}</div>
         </div>
+        <a class="cart-link-btn" href="${pyaterochkaSearchUrl(item.name)}" target="_blank" rel="noopener" title="Найти в Пятёрочке">🛒</a>
+        <button class="delete-item-btn" title="Удалить">✕</button>
       `;
       row.querySelector('.checkbox').addEventListener('click', async () => {
         try {
           await api(`/shopping/${item.id}`, { method: 'PATCH', body: { checked: !item.checked } });
+          loadShoppingList();
+        } catch (err) {
+          handleGateError(err);
+        }
+      });
+      row.querySelector('.delete-item-btn').addEventListener('click', async () => {
+        try {
+          await api(`/shopping/${item.id}`, { method: 'DELETE' });
           loadShoppingList();
         } catch (err) {
           handleGateError(err);
@@ -271,6 +336,23 @@
       loadShoppingList();
     } catch (err) {
       handleGateError(err);
+    }
+  });
+
+  document.getElementById('copyListBtn').addEventListener('click', async () => {
+    if (!lastShoppingItems.length) {
+      showToast('Список пуст');
+      return;
+    }
+    const text = lastShoppingItems
+      .filter((i) => !i.checked)
+      .map((i) => `${i.name}${i.qty ? ` — ${fmtQty(i)}` : ''}`)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Список скопирован — вставьте в поиск на 5ka.ru или в приложении');
+    } catch {
+      showToast('Не удалось скопировать. Скопируйте вручную из списка на экране.');
     }
   });
 

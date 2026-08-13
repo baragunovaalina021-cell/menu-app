@@ -11,20 +11,23 @@
   <div id="app">
 
     <header class="topbar">
-      <h1>🍽️ Меню недели</h1>
+      <div class="topbar-title">
+        <span class="topbar-emoji">🍽️</span>
+        <h1>Меню недели</h1>
+      </div>
       <div id="trialBadge" class="badge"></div>
     </header>
 
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="menu">Меню</button>
-      <button class="tab-btn" data-tab="shopping">Список покупок</button>
-      <button class="tab-btn" data-tab="family">Семья</button>
+      <button class="tab-btn active" data-tab="menu"><span>📅</span> Меню</button>
+      <button class="tab-btn" data-tab="shopping"><span>🛒</span> Покупки</button>
+      <button class="tab-btn" data-tab="family"><span>👨‍👩‍👧</span> Семья</button>
     </nav>
 
     <main>
       <section id="tab-menu" class="tab-panel active">
         <div id="menuDays"></div>
-        <button id="generateListBtn" class="primary-btn">Собрать список покупок из меню</button>
+        <button id="generateListBtn" class="primary-btn">✨ Собрать список покупок из меню</button>
       </section>
 
       <section id="tab-shopping" class="tab-panel">
@@ -32,8 +35,11 @@
           <input type="text" id="newItemName" placeholder="Добавить продукт..." required />
           <button type="submit">+</button>
         </form>
+        <div class="shopping-toolbar">
+          <button id="copyListBtn" class="chip-btn">📋 Скопировать список</button>
+          <button id="clearCheckedBtn" class="chip-btn">🧹 Убрать отмеченное</button>
+        </div>
         <div id="shoppingList"></div>
-        <button id="clearCheckedBtn" class="secondary-btn">Убрать отмеченное</button>
       </section>
 
       <section id="tab-family" class="tab-panel">
@@ -56,11 +62,11 @@
     <div id="recipePicker" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Выбрать блюдо</h3>
+          <h3 id="pickerDayTitle">Добавить блюдо</h3>
           <button id="closePicker">✕</button>
         </div>
         <input type="text" id="customMealInput" placeholder="Или впишите своё блюдо..." />
-        <button id="saveCustomMeal" class="primary-btn">Сохранить своё блюдо</button>
+        <button id="saveCustomMeal" class="primary-btn">Добавить своё блюдо</button>
         <div id="recipeList" class="recipe-list"></div>
       </div>
     </div>
