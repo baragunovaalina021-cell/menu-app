@@ -104,26 +104,59 @@
     return `${qStr} ${item.unit || ''}`.trim();
   }
 
-  function pyaterochkaSearchUrl(name) {
-    return `https://5ka.ru/search/?text=${encodeURIComponent(name)}`;
-  }
+  // Best-effort search URL patterns for the biggest Russian grocery
+  // retailers. None of them offer a public API to add items to a cart
+  // automatically — this only opens their product search, the person still
+  // taps "add to cart" themselves. A couple of these URL patterns (Магнит,
+  // Перекрёсток, Ozon) could not be verified against the live site from here;
+  // if one of them opens the wrong page, that specific pattern needs
+  // adjusting — let me know which one and I'll fix it.
+  const STORES = [
+    { name: 'Пятёрочка', emoji: '🍏', url: (q) => `https://5ka.ru/search/?text=${encodeURIComponent(q)}` },
+    { name: 'Перекрёсток', emoji: '🛍️', url: (q) => `https://www.perekrestok.ru/cat/search?text=${encodeURIComponent(q)}` },
+    { name: 'Магнит', emoji: '🔴', url: (q) => `https://magnit.ru/search/?q=${encodeURIComponent(q)}` },
+    { name: 'ВкусВилл', emoji: '🥦', url: (q) => `https://vkusvill.ru/search/?query=${encodeURIComponent(q)}` },
+    { name: 'Ozon Fresh', emoji: '📦', url: (q) => `https://www.ozon.ru/search/?text=${encodeURIComponent(q)}` },
+  ];
 
-  // Opens the Pyaterochka search page for this product. Inside Telegram, a
-  // plain <a target="_blank"> stays trapped in Telegram's own in-app browser,
-  // which never hands off to a native app. Telegram.WebApp.openLink() routes
+  // Opens a store's search page for this product. Inside Telegram, a plain
+  // <a target="_blank"> stays trapped in Telegram's own in-app browser, which
+  // never hands off to a native app. Telegram.WebApp.openLink() routes
   // through the phone's system browser instead — that's the only way a
-  // universal/app link even has a chance to open the real Pyaterochka app.
-  // Whether it actually does depends entirely on whether Pyaterochka has
-  // registered their app for that link on this device — we can't force it,
-  // there's no public API for that.
-  function openInPyaterochka(name) {
-    const url = pyaterochkaSearchUrl(name);
+  // universal/app link even has a chance to open the retailer's real app.
+  // Whether it actually does depends entirely on whether that retailer has
+  // registered their app for the link on this device — we can't force it,
+  // there's no public API for that with any of these stores.
+  function openInStore(store, name) {
+    const url = store.url(name);
     if (tg && typeof tg.openLink === 'function') {
       tg.openLink(url, { try_instant_view: false });
     } else {
       window.open(url, '_blank', 'noopener');
     }
   }
+
+  let storePickerItemName = null;
+  function openStorePicker(name) {
+    storePickerItemName = name;
+    document.getElementById('storePickerItem').textContent = name;
+    const list = document.getElementById('storeList');
+    list.innerHTML = '';
+    STORES.forEach((store) => {
+      const el = document.createElement('div');
+      el.className = 'recipe-item';
+      el.innerHTML = `<span class="r-emoji">${store.emoji}</span><div class="r-name">${store.name}</div>`;
+      el.addEventListener('click', () => {
+        openInStore(store, storePickerItemName);
+        document.getElementById('storePicker').classList.add('hidden');
+      });
+      list.appendChild(el);
+    });
+    document.getElementById('storePicker').classList.remove('hidden');
+  }
+  document.getElementById('closeStorePicker').addEventListener('click', () => {
+    document.getElementById('storePicker').classList.add('hidden');
+  });
 
   // --- Trial badge ----------------------------------------------------
   function renderTrialBadge(family) {
@@ -313,7 +346,7 @@
         <button class="cart-link-btn" title="Найти в Пятёрочке">🛒</button>
         <button class="delete-item-btn" title="Удалить">✕</button>
       `;
-      row.querySelector('.cart-link-btn').addEventListener('click', () => openInPyaterochka(item.name));
+      row.querySelector('.cart-link-btn').addEventListener('click', () => openStorePicker(item.name));
       row.querySelector('.checkbox').addEventListener('click', async () => {
         try {
           await api(`/shopping/${item.id}`, { method: 'PATCH', body: { checked: !item.checked } });
@@ -368,7 +401,7 @@
       .join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      showToast('Список скопирован — вставьте в поиск на 5ka.ru или в приложении');
+      showToast('Список скопирован — вставьте в поиск любого магазина');
     } catch {
       showToast('Не удалось скопировать. Скопируйте вручную из списка на экране.');
     }
